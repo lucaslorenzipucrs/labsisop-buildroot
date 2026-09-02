@@ -4,5 +4,10 @@
 mkdir -p $BASE_DIR/target/etc/init.d
 
 # Copia o arquivo e dá permissão
-cp $BASE_DIR/../custom-scripts/S41network-config $BASE_DIR/target/etc/init.d
-chmod +x $BASE_DIR/target/etc/init.d/S41network-config
+if [ -f "$BASE_DIR/../custom-scripts/S41network-config" ]; then
+    cp "$BASE_DIR/../custom-scripts/S41network-config" "$BASE_DIR/target/etc/init.d"
+    chmod +x "$BASE_DIR/target/etc/init.d/S41network-config"
+else
+    echo "O arquivo de configuração da rede não existe."
+fi
+
