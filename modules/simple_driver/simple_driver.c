@@ -4,6 +4,14 @@
  * this the LKM.
  *
  * Modified from Derek Molloy (http://www.derekmolloy.ie/)
+ *
+ * ATIVIDADE 1: em vez de um unico buffer estatico (message[256]) que era
+ * sobrescrito a cada write(), as mensagens agora sao guardadas em uma fila
+ * (lista encadeada, struct list_head). Cada write() cria um novo no e o
+ * insere no FIM da fila (list_add_tail); cada read() remove o no do INICIO
+ * da fila (list_first_entry + list_del) e devolve essa mensagem para o
+ * usuario -- ou seja, comportamento FIFO: a primeira mensagem escrita e' a
+ * primeira a ser lida.
  */
 
 #include <linux/init.h>           // Macros used to mark up functions e.g. __init __exit
@@ -12,21 +20,43 @@
 #include <linux/kernel.h>         // Contains types, macros, functions for the kernel
 #include <linux/fs.h>             // Header for the Linux file system support
 #include <linux/uaccess.h>
+#include <linux/list.h>           // struct list_head e as macros de manipulacao de lista
+#include <linux/slab.h>           // kmalloc / kfree
+#include <linux/mutex.h>          // protege a fila contra acesso concorrente
 
 #define  DEVICE_NAME "simple_driver" ///< The device will appear at /dev/simple_driver using this value
 #define  CLASS_NAME  "simple_class"        ///< The device class -- this is a character device driver
+#define  MAX_MSG_SIZE 256                  ///< Tamanho maximo aceito para uma mensagem
 
 MODULE_LICENSE("GPL");            ///< The license type -- this affects available functionality
 MODULE_AUTHOR("Author Name");    ///< The author -- visible when you use modinfo
-MODULE_DESCRIPTION("A generic Linux char driver.");  ///< The description -- see modinfo
-MODULE_VERSION("0.2");            ///< A version number to inform users
+MODULE_DESCRIPTION("A generic Linux char driver com fila de mensagens (Atividade 1).");
+MODULE_VERSION("0.3");            ///< A version number to inform users
 
 static int    majorNumber;                  ///< Stores the device number -- determined automatically
-static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
-static short  size_of_message;              ///< Used to remember the size of the string stored
 static int    numberOpens = 0;              ///< Counts the number of times the device is opened
 static struct class *charClass  = NULL; ///< The device-driver class struct pointer
 static struct device *charDevice = NULL; ///< The device-driver device struct pointer
+
+/**
+ * @brief No da fila de mensagens.
+ * Cada write() bem sucedido aloca um destes, copia a mensagem do usuario
+ * para dentro de "data", e encaixa o campo "list" (o list_head embutido)
+ * na fila global msg_queue.
+ */
+struct msg_node {
+	char *data;
+	size_t size;
+	struct list_head list;
+};
+
+/** @brief Cabeca (sentinela) da fila -- LIST_HEAD ja inicializa
+ *  msg_queue.next e msg_queue.prev apontando para ela mesma (fila vazia). */
+static LIST_HEAD(msg_queue);
+
+/** @brief Mutex que protege a fila: varios processos podem ter o device
+ *  aberto ao mesmo tempo e chamar read()/write() concorrentemente. */
+static DEFINE_MUTEX(msg_queue_lock);
 
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
@@ -49,9 +79,6 @@ static struct file_operations fops =
 
 
 /** @brief The LKM initialization function
- *  The static keyword restricts the visibility of the function to within this C file. The __init
- *  macro means that for a built-in driver (not a LKM) the function is only used at initialization
- *  time and that it can be discarded and its memory freed up after that point.
  *  @return returns 0 if successful
  */
 static int __init simple_init(void){
@@ -63,7 +90,7 @@ static int __init simple_init(void){
 		printk(KERN_ALERT "Simple Driver failed to register a major number\n");
 		return majorNumber;
 	}
-	
+
 	printk(KERN_INFO "Simple Driver: registered correctly with major number %d\n", majorNumber);
 
 	// Register the device class
@@ -73,7 +100,7 @@ static int __init simple_init(void){
 		printk(KERN_ALERT "Simple Driver: failed to register device class\n");
 		return PTR_ERR(charClass);          // Correct way to return an error on a pointer
 	}
-	
+
 	printk(KERN_INFO "Simple Driver: device class registered correctly\n");
 
 	// Register the device driver
@@ -84,18 +111,32 @@ static int __init simple_init(void){
 		printk(KERN_ALERT "Simple Driver: failed to create the device\n");
 		return PTR_ERR(charDevice);
 	}
-	
+
 	printk(KERN_INFO "Simple Driver: device class created correctly\n"); // Made it! device was initialized
-		
+
 	return 0;
 }
 
 
 /** @brief The LKM cleanup function
- *  Similar to the initialization function, it is static. The __exit macro notifies that if this
- *  code is used for a built-in driver (not a LKM) that this function is not required.
+ *  Alem de desfazer o registro do device, agora tambem esvazia a fila de
+ *  mensagens (se alguma tiver ficado pendente), liberando toda a memoria
+ *  alocada com kmalloc -- senao vira memory leak quando o modulo e' removido.
  */
 static void __exit simple_exit(void){
+	struct msg_node *node, *tmp;
+
+	mutex_lock(&msg_queue_lock);
+	/* list_for_each_entry_safe: percorre a lista permitindo remover o
+	 * elemento atual durante a iteracao (a versao "nao-safe" quebraria,
+	 * pois list_del apaga os ponteiros next/prev do no removido). */
+	list_for_each_entry_safe(node, tmp, &msg_queue, list) {
+		list_del(&node->list);
+		kfree(node->data);
+		kfree(node);
+	}
+	mutex_unlock(&msg_queue_lock);
+
 	device_destroy(charClass, MKDEV(majorNumber, 0));     // remove the device
 	class_unregister(charClass);                          // unregister the device class
 	class_destroy(charClass);                             // remove the device class
@@ -104,11 +145,7 @@ static void __exit simple_exit(void){
 }
 
 
-/** @brief The device open function that is called each time the device is opened
- *  This will only increment the numberOpens counter in this case.
- *  @param inodep A pointer to an inode object (defined in linux/fs.h)
- *  @param filep A pointer to a file object (defined in linux/fs.h)
- */
+/** @brief The device open function that is called each time the device is opened */
 static int dev_open(struct inode *inodep, struct file *filep){
 	numberOpens++;
 	printk(KERN_INFO "Simple Driver: device has been opened %d time(s)\n", numberOpens);
@@ -116,67 +153,107 @@ static int dev_open(struct inode *inodep, struct file *filep){
 }
 
 
-/** @brief This function is called whenever device is being read from user space i.e. data is
- *  being sent from the device to the user. In this case is uses the copy_to_user() function to
- *  send the buffer string to the user and captures any errors.
+/** @brief Le a PROXIMA mensagem da fila (a mais antiga ainda nao lida) e
+ *  remove ela da lista. Se a fila estiver vazia, nao ha nada para ler.
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  *  @param buffer The pointer to the buffer to which this function writes the data
- *  @param len The length of the b
- *  @param offset The offset if required
+ *  @param len The length (capacidade) do buffer do usuario
+ *  @param offset The offset if required (nao usado aqui)
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
-	int error_count = 0;
-   
-	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
-	error_count = copy_to_user(buffer, message, size_of_message);
+	struct msg_node *node;
+	size_t to_copy;
+	int error_count;
 
-	if (error_count==0){            // if true then have success
-		printk(KERN_INFO "Simple Driver: sent %d characters to the user\n", size_of_message);
-		return (size_of_message=0);  // clear the position to the start and return 0
+	mutex_lock(&msg_queue_lock);
+
+	if (list_empty(&msg_queue)) {
+		mutex_unlock(&msg_queue_lock);
+		printk(KERN_INFO "Simple Driver: fila de mensagens vazia, nada para ler\n");
+		return 0; /* 0 = nenhum byte lido (fila vazia) */
 	}
-	else {
-		printk(KERN_INFO "Simple Driver: failed to send %d characters to the user\n", error_count);
-		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+
+	/* list_first_entry: pega o container (struct msg_node) do primeiro
+	 * list_head da fila -- e' o container_of que a gente discutiu no
+	 * quadro, ja' pronto como macro do kernel. */
+	node = list_first_entry(&msg_queue, struct msg_node, list);
+	list_del(&node->list); /* retira o no da fila (unlink dos vizinhos) */
+
+	mutex_unlock(&msg_queue_lock);
+
+	to_copy = min(len, node->size);
+
+	error_count = copy_to_user(buffer, node->data, to_copy);
+
+	if (error_count != 0){
+		printk(KERN_INFO "Simple Driver: falhou ao enviar %d bytes ao usuario\n", error_count);
+		kfree(node->data);
+		kfree(node);
+		return -EFAULT;
 	}
+
+	printk(KERN_INFO "Simple Driver: enviados %zu caracteres ao usuario\n", to_copy);
+
+	kfree(node->data);
+	kfree(node);
+
+	return to_copy; /* numero de bytes efetivamente copiados */
 }
 
 
-/** @brief This function is called whenever the device is being written to from user space i.e.
- *  data is sent to the device from the user. The data is copied to the message[] array in this
- *  LKM using the sprintf() function along with the length of the string.
+/** @brief Recebe uma mensagem do usuario e a insere no FIM da fila
+ *  (list_add_tail), preservando a ordem de chegada (FIFO).
  *  @param filep A pointer to a file object
  *  @param buffer The buffer to that contains the string to write to the device
  *  @param len The length of the array of data that is being passed in the const char buffer
  *  @param offset The offset if required
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
-	if (len < sizeof(message)){
-		sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-		size_of_message = strlen(message);                 // store the length of the stored message
-		printk(KERN_INFO "Simple Driver: received %zu characters from the user\n", len);
-		
-		return len;
-	}else{
-		sprintf(message, "(0 letters)");
-		printk(KERN_INFO "Simple Driver: too many characters to deal with\n", len);
-		
-		return 0;
+	struct msg_node *node;
+
+	if (len == 0 || len > MAX_MSG_SIZE){
+		printk(KERN_ALERT "Simple Driver: tamanho de mensagem invalido (%zu)\n", len);
+		return -EINVAL;
 	}
+
+	node = kmalloc(sizeof(*node), GFP_KERNEL);
+	if (!node)
+		return -ENOMEM;
+
+	node->data = kmalloc(len, GFP_KERNEL);
+	if (!node->data){
+		kfree(node);
+		return -ENOMEM;
+	}
+
+	/* copy_from_user: forma segura de trazer a mensagem do espaco do
+	 * usuario para o kernel (o "buffer" do parametro e' um ponteiro
+	 * __user, nao pode ser lido diretamente). */
+	if (copy_from_user(node->data, buffer, len)){
+		kfree(node->data);
+		kfree(node);
+		return -EFAULT;
+	}
+
+	node->size = len;
+	INIT_LIST_HEAD(&node->list);
+
+	mutex_lock(&msg_queue_lock);
+	list_add_tail(&node->list, &msg_queue); /* entra no FIM da fila */
+	mutex_unlock(&msg_queue_lock);
+
+	printk(KERN_INFO "Simple Driver: recebidos %zu caracteres do usuario, adicionados a fila\n", len);
+
+	return len;
 }
 
 /** @brief The device release function that is called whenever the device is closed/released by
  *  the userspace program
- *  @param inodep A pointer to an inode object (defined in linux/fs.h)
- *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_release(struct inode *inodep, struct file *filep){
 	printk(KERN_INFO "Simple Driver: device successfully closed\n");
 	return 0;
 }
 
-/** @brief A module must use the module_init() module_exit() macros from linux/init.h, which
- *  identify the initialization function at insertion time and the cleanup function (as
- *  listed above)
- */
 module_init(simple_init);
 module_exit(simple_exit);
