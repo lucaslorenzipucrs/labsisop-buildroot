@@ -17,4 +17,4 @@ cp $BASE_DIR/../custom-scripts/S99systeminfo $BASE_DIR/target/etc/init.d/
 chmod +x $BASE_DIR/target/etc/init.d/S99systeminfo
 
 make -C $BASE_DIR/../modules/simple_driver/
-
+make -C $BASE_DIR/../modules/cripto/

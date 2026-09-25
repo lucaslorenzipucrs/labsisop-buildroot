@@ -1,0 +1,1 @@
+cmd_/workspaces/labsisop-buildroot/modules/cripto/cripto.ko := ld -r -m elf_i386 -T ./scripts/module-common.lds --build-id  -o /workspaces/labsisop-buildroot/modules/cripto/cripto.ko /workspaces/labsisop-buildroot/modules/cripto/cripto.o /workspaces/labsisop-buildroot/modules/cripto/cripto.mod.o ;  true
