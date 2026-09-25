@@ -9,3 +9,4 @@
 *.rej
 *~
 *.pyc
+sdb.bin
