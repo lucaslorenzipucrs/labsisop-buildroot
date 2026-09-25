@@ -1,4 +1,4 @@
-obj-m := cripto.o
+obj-m := cripto.o xtea_driver.o
 BUILDROOT_DIR := ../..
 KDIR := $(BUILDROOT_DIR)/output/build/linux-custom
 COMPILER := $(BUILDROOT_DIR)/output/host/bin/i686-buildroot-linux-gnu-gcc
@@ -13,5 +13,5 @@ clean:
 	rm -f *.o *.ko .*.cmd
 	rm -f modules.order
 	rm -f Module.symvers
-	rm -f cripto.mod.c
+	rm -f *.mod.c
 	rm -f test_cripto

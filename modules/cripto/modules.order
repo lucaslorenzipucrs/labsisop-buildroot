@@ -1,1 +1,2 @@
 kernel//workspaces/labsisop-buildroot/modules/cripto/cripto.ko
+kernel//workspaces/labsisop-buildroot/modules/cripto/xtea_driver.ko
