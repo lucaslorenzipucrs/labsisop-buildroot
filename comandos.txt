@@ -1,0 +1,65 @@
+COLINHA DE COMANDOS - APRESENTACAO
+
+INICIAR QEMU
+cd /workspaces/labsisop-buildroot
+cd /workspaces/labsisop-buildroot
+
+./output/host/bin/qemu-system-i386 \
+  -M pc \
+  -kernel output/images/bzImage \
+  -hda output/images/rootfs.ext2 \
+  -hdb sdb.bin \
+  -append "rootwait root=/dev/sda console=tty1 console=ttyS0" \
+  -net nic,model=virtio -net user \
+  -nographic 2>&1 | tee qemu_log.txt
+
+LOGAR COMO ROOT
+root
+
+TUTORIAL 2.2 - SYSCALLS
+syscall_test 1
+sleep_test
+print_message_test "Teste"
+dmesg | grep sys_printMessage
+
+TUTORIAL 2.3 - MODULOS / DRIVERS
+modprobe khello
+rmmod khello
+dmesg | grep -E 'Hello, world|Goodbye, cruel world'
+modprobe simple_driver
+printf 'teste professor\n\n' | test_simple_driver
+test_simple_driver_fila
+rmmod simple_driver
+
+modprobe cripto
+echo 'enc f0e1d2c3 b4a59687 78695a4b 3c2d1e0f 8 1234567890123456' > /dev/xtea_driver
+dd if=/dev/xtea_driver bs=17 count=1 2>/dev/null
+
+echo 'dec f0e1d2c3 b4a59687 78695a4b 3c2d1e0f 8 fe363df6c986d015' > /dev/xtea_driver
+dd if=/dev/xtea_driver bs=17 count=1 2>/dev/null
+rmmod cripto
+
+modprobe xtea_driver key0=f0e1d2c3 key1=b4a59687 key2=78695a4b key3=3c2d1e0f
+test_cripto f0e1d2c3 b4a59687 78695a4b 3c2d1e0f
+rmmod xtea_driver
+
+TP2 - SSTF
+disk_test
+sync
+echo noop > /sys/block/sdb/queue/scheduler
+cat /sys/block/sdb/queue/scheduler
+modprobe sstf-iosched
+echo sstf > /sys/block/sdb/queue/scheduler
+cat /sys/block/sdb/queue/scheduler
+sector_read
+echo noop > /sys/block/sdb/queue/scheduler
+rmmod sstf-iosched
+dmesg | grep '\[SSTF\]'
+poweroff
+
+HOST - GERAR O LOG E ANALISAR
+cd /workspaces/labsisop-buildroot
+./output/host/bin/hexdump -C sdb.bin | head -n 1
+cd T2_LabSisop/T2_LabSisop
+python3 analyze_sstf_log.py sstf_log.txt
+

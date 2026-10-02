@@ -1,13 +1,4 @@
-/**
- * @brief  Aplicacao de teste extra para a Atividade 1: escreve varias
- * mensagens seguidas no /dev/simple_driver e depois le de volta a mesma
- * quantidade, mostrando que elas retornam na mesma ordem em que foram
- * escritas (comportamento de fila / FIFO), e que ler alem do que foi
- * escrito devolve 0 bytes (fila vazia).
- *
- * O test_simple_driver.c original continua funcionando normalmente (ele
- * so' testa uma mensagem por vez, que e' o caso mais simples da fila).
- */
+/** @brief Verifica a ordem FIFO e o retorno da fila vazia. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -36,8 +27,7 @@ int main(void){
 		return errno;
 	}
 
-	/* Escreve todas as mensagens antes de ler qualquer uma,
-	 * pra provar que elas ficam empilhadas na fila do driver */
+	// Envia tudo antes de ler. 
 	for (i = 0; i < n; i++){
 		printf("Escrevendo mensagem %d: [%s]\n", i + 1, mensagens[i]);
 		ret = write(fd, mensagens[i], strlen(mensagens[i]));
@@ -48,7 +38,7 @@ int main(void){
 		}
 	}
 
-	/* Agora le de volta -- deve sair na mesma ordem que foi escrita */
+	// Confere se as mensagens retornam na ordem de envio. 
 	for (i = 0; i < n; i++){
 		memset(receive, 0, BUFFER_LENGTH);
 		ret = read(fd, receive, BUFFER_LENGTH);
@@ -63,7 +53,7 @@ int main(void){
 				? "OK" : "DIVERGIU");
 	}
 
-	/* Uma leitura a mais deve vir vazia (fila esgotada) */
+	// Confirma que uma leitura extra encontra a fila vazia. 
 	memset(receive, 0, BUFFER_LENGTH);
 	ret = read(fd, receive, BUFFER_LENGTH);
 	printf("Leitura extra (fila deveria estar vazia): retornou %d byte(s) %s\n",

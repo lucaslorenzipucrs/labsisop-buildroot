@@ -16,7 +16,7 @@
 
 int main(){
 	int ret, fd;
-	char receive[BUFFER_LENGTH];     ///< The receive buffer from the LKM
+	char receive[BUFFER_LENGTH + 1]; ///< The receive buffer from the LKM
 	char stringToSend[BUFFER_LENGTH];
 	
 	printf("Starting device test code example...\n");
@@ -47,6 +47,7 @@ int main(){
 		perror("Failed to read the message from the device.");
 		return errno;
 	}
+	receive[ret] = '\0';
 	
 	printf("The received message is: [%s]\n", receive);
 	printf("End of the program\n");

@@ -1,33 +1,8 @@
-/**
- * @brief Atividade 2: driver de criptografia XTEA, acessivel em /dev/xtea_driver.
- *
- * Estrutura geral (registro de device, classe, file_operations) baseada no
- * mesmo padrao do Simple Driver (tutorial de Derek Molloy). O driver e' um
- * modulo NOVO (cripto.c / device xtea_driver), separado do simple_driver
- * da Atividade 1, para nao ter conflito entre os dois.
- *
- * PROTOCOLO (comando enviado via write(), texto ASCII em uma linha so):
- *
- *   <cmd> <key0> <key1> <key2> <key3> <tamanho> <dados_hex>
- *
- *   cmd       : "enc" (cifra) ou "dec" (decifra)
- *   key0..3   : 4 palavras de 32 bits da chave XTEA (128 bits), em hex,
- *               exatamente como no exemplo do enunciado
- *               (ex: f0e1d2c3 b4a59687 78695a4b 3c2d1e0f)
- *   tamanho   : quantidade de bytes dos dados, em decimal. Precisa ser
- *               multiplo de 8 (XTEA opera em blocos de 64 bits) e no
- *               maximo MAX_DATA_BYTES.
- *   dados_hex : os bytes de entrada (texto claro para "enc", texto
- *               cifrado para "dec"), em hexadecimal, exatamente
- *               2*tamanho caracteres.
- *
- *   Exemplo (igual ao do enunciado):
- *   enc f0e1d2c3 b4a59687 78695a4b 3c2d1e0f 16 aabbccddeeff00112233445566778899aabbccddeeff00
- *
- * O resultado da ultima operacao (enc ou dec) fica guardado no driver como
- * uma string hexadecimal, e e' devolvido para a aplicacao no proximo
- * read() -- assim como a entrada, tambem em hexadecimal, pra facilitar
- * comparar/copiar entre comandos.
+//*
+ * @brief 
+ * Protocolo: <enc|dec> <key0..key3> <tamanho> <dados_hex>.
+ * A chave tem 128 bits; os dados devem ter tamanho multiplo de 8 bytes.
+ * O resultado hexadecimal fica disponivel na proxima leitura.
  */
 
 #include <linux/init.h>
@@ -40,15 +15,14 @@
 #include <linux/mutex.h>
 #include <linux/string.h>
 
-#define DEVICE_NAME "xtea_driver"   ///< Aparece em /dev/xtea_driver
-#define CLASS_NAME  "cripto_class"  ///< Nome de classe proprio (nao usa o do simple_driver)
+#define DEVICE_NAME "xtea_driver"  
+#define CLASS_NAME  "cripto_class"  
 
-#define XTEA_ROUNDS      32   ///< Numero de rounds recomendado (2 sub-rounds cada)
-#define XTEA_BLOCK_BYTES 8    ///< XTEA opera em blocos de 64 bits = 8 bytes
-#define MAX_DATA_BYTES   256  ///< Tamanho maximo de dados aceito por comando
+#define XTEA_ROUNDS      32   //Numero de rounds do XTEA.
+#define XTEA_BLOCK_BYTES 8    //Tamanho do bloco, em bytes.
+#define MAX_DATA_BYTES   256  //Limite de dados por comando.
 
-/* Buffer de entrada: "enc "/"dec " + 4 chaves de 8 hex + 1 espaco cada +
- * numero do tamanho + espacos + 2*MAX_DATA_BYTES hex + folga */
+// Reserva espaco para o comando, a chave e os dados em hexadecimal. */
 #define MAX_CMD_LEN (16 + 4*9 + 16 + 2*MAX_DATA_BYTES + 16)
 
 MODULE_LICENSE("GPL");
@@ -61,17 +35,13 @@ static struct class  *cryptoClass  = NULL;
 static struct device *cryptoDevice = NULL;
 static int numberOpens = 0;
 
-/** @brief Protege o "resultado da ultima operacao" contra acesso concorrente. */
+//Protege o resultado contra acessos concorrentes.
 static DEFINE_MUTEX(dev_lock);
 
-/** @brief Resultado (em hexadecimal, terminado em '\0') da ultima operacao
- *  enc/dec, devolvido no proximo read(). NULL se nao ha nada ainda. */
+// @brief Resultado hexadecimal devolvido na proxima leitura.
 static char *result_hex = NULL;
-static size_t result_len = 0; /* tamanho da string, sem contar o '\0' */
+static size_t result_len = 0;  
 
-// ---------------------------------------------------------------------
-// XTEA (algoritmo de referencia do enunciado, adaptado para tipos do kernel)
-// ---------------------------------------------------------------------
 
 static void xtea_encipher(u32 num_rounds, u32 v[2], const u32 key[4]){
 	u32 i;
@@ -97,14 +67,11 @@ static void xtea_decipher(u32 num_rounds, u32 v[2], const u32 key[4]){
 	v[0] = v0; v[1] = v1;
 }
 
-// ---------------------------------------------------------------------
-// Helpers de hex <-> bytes (big-endian: primeiro par de hex = byte mais
-// significativo, igual a como um %08x normalmente e' lido/escrito)
-// ---------------------------------------------------------------------
+// Conversoes entre hexadecimal e bytes em big-endian.
 
 static const char hex_digits[] = "0123456789abcdef";
 
-/** @return valor do nibble (0-15), ou -1 se 'c' nao for hex valido */
+// @return Valor hexadecimal de c, ou -1 se o caractere for invalido. 
 static int hex_nibble(char c){
 	if (c >= '0' && c <= '9') return c - '0';
 	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -112,8 +79,7 @@ static int hex_nibble(char c){
 	return -1;
 }
 
-/** @brief Converte uma string hex (comprimento par) em bytes.
- *  @return 0 em sucesso, -1 se algum caractere nao for hex valido. */
+// Converte hexadecimal em bytes.
 static int hex_to_bytes(const char *hex, size_t hexlen, unsigned char *out){
 	size_t i;
 	for (i = 0; i < hexlen / 2; i++){
@@ -146,9 +112,7 @@ static void u32_to_bytes_be(u32 v, unsigned char *b){
 	b[3] = v & 0xff;
 }
 
-// ---------------------------------------------------------------------
 // file_operations
-// ---------------------------------------------------------------------
 
 static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
@@ -174,7 +138,7 @@ static int dev_release(struct inode *inodep, struct file *filep){
 	return 0;
 }
 
-/** @brief Devolve o resultado (hex) da ultima operacao enc/dec. */
+// Devolve o resultado hexadecimal da ultima operacao. 
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
 	size_t to_copy;
 	int error_count;
@@ -187,7 +151,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 		return 0;
 	}
 
-	to_copy = min(len, result_len + 1); /* +1 para incluir o '\0' se couber */
+	to_copy = min(len, result_len + 1); 
 	error_count = copy_to_user(buffer, result_hex, to_copy);
 
 	mutex_unlock(&dev_lock);
@@ -201,7 +165,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	return to_copy;
 }
 
-/** @brief Interpreta o comando "enc"/"dec" e executa a operacao XTEA. */
+//  Valida o comando e executa a operacao XTEA. 
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	char *kbuf;
 	char cmd[8];
@@ -235,9 +199,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		return -ENOMEM;
 	}
 
-	/* "%7s" garante que o token de comando nao estoure cmd[8], mesmo que
-	 * o usuario mande algo maior que "enc"/"dec" (nesse caso o strcmp
-	 * abaixo vai simplesmente rejeitar como comando invalido). */
+	// Limita o comando a 7 caracteres antes de valida-lo. 
 	n = sscanf(kbuf, "%7s %x %x %x %x %u %s",
 		cmd, &key[0], &key[1], &key[2], &key[3], &data_size, hexdata);
 
@@ -288,7 +250,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		return -EINVAL;
 	}
 
-	/* Processa bloco a bloco (8 bytes = 64 bits por bloco) */
+	// Processa os dados em blocos de 8 bytes. 
 	nblocks = data_size / XTEA_BLOCK_BYTES;
 	for (i = 0; i < nblocks; i++){
 		u32 v[2];
@@ -307,7 +269,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		u32_to_bytes_be(v[1], block_out + 4);
 	}
 
-	/* Monta o novo resultado (hex) e substitui o anterior */
+	// Guarda o resultado hexadecimal para a proxima leitura. 
 	newresult = kmalloc(data_size * 2 + 1, GFP_KERNEL);
 	if (!newresult){
 		kfree(kbuf); kfree(hexdata); kfree(rawdata); kfree(outdata);
@@ -332,9 +294,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	return len;
 }
 
-// ---------------------------------------------------------------------
 // init / exit
-// ---------------------------------------------------------------------
 
 static int __init cripto_init(void){
 	printk(KERN_INFO "Cripto Driver: Initializing the LKM\n");

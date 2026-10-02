@@ -5,13 +5,6 @@
  *
  * Modified from Derek Molloy (http://www.derekmolloy.ie/)
  *
- * ATIVIDADE 1: em vez de um unico buffer estatico (message[256]) que era
- * sobrescrito a cada write(), as mensagens agora sao guardadas em uma fila
- * (lista encadeada, struct list_head). Cada write() cria um novo no e o
- * insere no FIM da fila (list_add_tail); cada read() remove o no do INICIO
- * da fila (list_first_entry + list_del) e devolve essa mensagem para o
- * usuario -- ou seja, comportamento FIFO: a primeira mensagem escrita e' a
- * primeira a ser lida.
  */
 
 #include <linux/init.h>           // Macros used to mark up functions e.g. __init __exit
@@ -20,13 +13,13 @@
 #include <linux/kernel.h>         // Contains types, macros, functions for the kernel
 #include <linux/fs.h>             // Header for the Linux file system support
 #include <linux/uaccess.h>
-#include <linux/list.h>           // struct list_head e as macros de manipulacao de lista
+#include <linux/list.h>           // struct list_head e macros para manipular listas
 #include <linux/slab.h>           // kmalloc / kfree
-#include <linux/mutex.h>          // protege a fila contra acesso concorrente
+#include <linux/mutex.h>          // protege a fila contra acessos concorrentes
 
 #define  DEVICE_NAME "simple_driver" ///< The device will appear at /dev/simple_driver using this value
 #define  CLASS_NAME  "simple_class"        ///< The device class -- this is a character device driver
-#define  MAX_MSG_SIZE 256                  ///< Tamanho maximo aceito para uma mensagem
+#define  MAX_MSG_SIZE 256                  ///< Tamanho maximo
 
 MODULE_LICENSE("GPL");            ///< The license type -- this affects available functionality
 MODULE_AUTHOR("Author Name");    ///< The author -- visible when you use modinfo
@@ -38,24 +31,17 @@ static int    numberOpens = 0;              ///< Counts the number of times the 
 static struct class *charClass  = NULL; ///< The device-driver class struct pointer
 static struct device *charDevice = NULL; ///< The device-driver device struct pointer
 
-/**
- * @brief No da fila de mensagens.
- * Cada write() bem sucedido aloca um destes, copia a mensagem do usuario
- * para dentro de "data", e encaixa o campo "list" (o list_head embutido)
- * na fila global msg_queue.
- */
+/** @brief Elemento da fila: guarda a mensagem, seu tamanho e o elo da lista. */
 struct msg_node {
 	char *data;
 	size_t size;
 	struct list_head list;
 };
 
-/** @brief Cabeca (sentinela) da fila -- LIST_HEAD ja inicializa
- *  msg_queue.next e msg_queue.prev apontando para ela mesma (fila vazia). */
+/** @brief Inicializa a fila vazia. */
 static LIST_HEAD(msg_queue);
 
-/** @brief Mutex que protege a fila: varios processos podem ter o device
- *  aberto ao mesmo tempo e chamar read()/write() concorrentemente. */
+/** @brief Protege a fila contra acessos concorrentes. */
 static DEFINE_MUTEX(msg_queue_lock);
 
 // The prototype functions for the character driver -- must come before the struct definition
@@ -119,17 +105,13 @@ static int __init simple_init(void){
 
 
 /** @brief The LKM cleanup function
- *  Alem de desfazer o registro do device, agora tambem esvazia a fila de
- *  mensagens (se alguma tiver ficado pendente), liberando toda a memoria
- *  alocada com kmalloc -- senao vira memory leak quando o modulo e' removido.
+ *  Remove o dispositivo e libera as mensagens que ainda estiverem na fila.
  */
 static void __exit simple_exit(void){
 	struct msg_node *node, *tmp;
 
 	mutex_lock(&msg_queue_lock);
-	/* list_for_each_entry_safe: percorre a lista permitindo remover o
-	 * elemento atual durante a iteracao (a versao "nao-safe" quebraria,
-	 * pois list_del apaga os ponteiros next/prev do no removido). */
+	/* Percorre a fila com seguranca enquanto remove seus elementos. */
 	list_for_each_entry_safe(node, tmp, &msg_queue, list) {
 		list_del(&node->list);
 		kfree(node->data);
@@ -153,8 +135,7 @@ static int dev_open(struct inode *inodep, struct file *filep){
 }
 
 
-/** @brief Le a PROXIMA mensagem da fila (a mais antiga ainda nao lida) e
- *  remove ela da lista. Se a fila estiver vazia, nao ha nada para ler.
+/**  @brief Retira e retorna a mensagem mais antiga da fila.
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  *  @param buffer The pointer to the buffer to which this function writes the data
  *  @param len The length (capacidade) do buffer do usuario
@@ -169,15 +150,12 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 
 	if (list_empty(&msg_queue)) {
 		mutex_unlock(&msg_queue_lock);
-		printk(KERN_INFO "Simple Driver: fila de mensagens vazia, nada para ler\n");
-		return 0; /* 0 = nenhum byte lido (fila vazia) */
+		printk(KERN_INFO "Simple Driver: fila de mensagens vazia\n");
+		return 0;
 	}
 
-	/* list_first_entry: pega o container (struct msg_node) do primeiro
-	 * list_head da fila -- e' o container_of que a gente discutiu no
-	 * quadro, ja' pronto como macro do kernel. */
 	node = list_first_entry(&msg_queue, struct msg_node, list);
-	list_del(&node->list); /* retira o no da fila (unlink dos vizinhos) */
+	list_del(&node->list); // Remove o no da fila. 
 
 	mutex_unlock(&msg_queue_lock);
 
@@ -197,12 +175,11 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	kfree(node->data);
 	kfree(node);
 
-	return to_copy; /* numero de bytes efetivamente copiados */
+	return to_copy; // Numero de bytes copiados
 }
 
 
-/** @brief Recebe uma mensagem do usuario e a insere no FIM da fila
- *  (list_add_tail), preservando a ordem de chegada (FIFO).
+	 //**  @brief Copia uma mensagem do usuario e a adiciona.
  *  @param filep A pointer to a file object
  *  @param buffer The buffer to that contains the string to write to the device
  *  @param len The length of the array of data that is being passed in the const char buffer
@@ -226,9 +203,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		return -ENOMEM;
 	}
 
-	/* copy_from_user: forma segura de trazer a mensagem do espaco do
-	 * usuario para o kernel (o "buffer" do parametro e' um ponteiro
-	 * __user, nao pode ser lido diretamente). */
+	// copia a mensagem do espaco do usuario para o kernel com seguranca. 
 	if (copy_from_user(node->data, buffer, len)){
 		kfree(node->data);
 		kfree(node);
@@ -239,7 +214,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	INIT_LIST_HEAD(&node->list);
 
 	mutex_lock(&msg_queue_lock);
-	list_add_tail(&node->list, &msg_queue); /* entra no FIM da fila */
+	list_add_tail(&node->list, &msg_queue); 
 	mutex_unlock(&msg_queue_lock);
 
 	printk(KERN_INFO "Simple Driver: recebidos %zu caracteres do usuario, adicionados a fila\n", len);

@@ -23,7 +23,7 @@ int main(int argc, char** argv){
 	ret = syscall(SYSCALL_PRINTMESSAGE, argv[1]);
 
 	if(ret >= 0) {
-		printf("Mensagem enviada ao log do kernel (%ld bytes). Confira com 'dmesg'.\n", ret);
+		printf("Mensagem enviada ao kernel (%ld bytes). Confira com 'dmesg'.\n", ret);
 	}
 	else {
 		printf("System call 'printMessage' did not execute as expected, error %ld\n", ret);

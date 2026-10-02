@@ -6,11 +6,6 @@
 #include <linux/uaccess.h>
 #include "sleepProcesses.h"
 
-/* Tamanho do buffer interno do kernel usado para montar a lista.
- * Se houver muitos processos dormindo, a lista e' truncada de forma
- * segura (nao estoura o buffer). */
-#define MAX_BUF 4096
-
 asmlinkage long sys_listSleepingProcesses(const char __user *buf, int size) {
 	struct task_struct *proces;
 	char *kbuf;
@@ -23,17 +18,14 @@ asmlinkage long sys_listSleepingProcesses(const char __user *buf, int size) {
 	if (size <= 0)
 		return -1;
 
-	kbuf = kmalloc(MAX_BUF, GFP_KERNEL);
+	kbuf = kmalloc(4096, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
 
-	/* Percorre todos os processos do sistema */
 	for_each_process(proces) {
 
-		/* So' nos interessam processos "dormindo":
-		 *  - TASK_INTERRUPTIBLE   -> processo de usuario em sleep
-		 *  - TASK_UNINTERRUPTIBLE -> processo em sleep dentro do kernel
-		 * (TASK_RUNNING fica de fora, pois esta' pronto/executando) */
+		//  So nos interessam processos dormindo:
+
 		if (proces->state == TASK_INTERRUPTIBLE ||
 		    proces->state == TASK_UNINTERRUPTIBLE) {
 
@@ -45,9 +37,8 @@ asmlinkage long sys_listSleepingProcesses(const char __user *buf, int size) {
 						"TASK_INTERRUPTIBLE" :
 						"TASK_UNINTERRUPTIBLE");
 
-			/* Para de adicionar linhas se o buffer interno encher,
-			 * em vez de estourar o kbuf */
-			if (offset + len >= MAX_BUF - 1)
+			// buffer cheio
+			if (offset + len >= 4096 - 1)
 				break;
 
 			memcpy(kbuf + offset, line, len);
@@ -55,9 +46,8 @@ asmlinkage long sys_listSleepingProcesses(const char __user *buf, int size) {
 		}
 	}
 	kbuf[offset] = '\0';
-	bufsz = offset + 1; /* inclui o '\0' */
+	bufsz = offset + 1;  // inclui o '\0' 
 
-	/* Buffer do usuario e' pequeno demais */
 	if (bufsz > size) {
 		kfree(kbuf);
 		return -1;
@@ -66,7 +56,6 @@ asmlinkage long sys_listSleepingProcesses(const char __user *buf, int size) {
 	ret = copy_to_user((void *)buf, (void *)kbuf, bufsz);
 	kfree(kbuf);
 
-	/* Segue o mesmo padrao de retorno do processInfo.c:
-	 * numero de bytes efetivamente copiados */
+	// Segue o mesmo padrao de retorno do processInfo.c:
 	return bufsz - ret;
 }

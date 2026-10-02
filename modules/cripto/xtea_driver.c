@@ -1,37 +1,7 @@
 /**
- * @brief Extensao da Atividade 2: driver de criptografia XTEA
- * (/dev/xtea_driver) que agora recebe a chave via PARAMETRO DE MODULO no
- * momento do carregamento, em vez de exigir a chave em cada comando
- * write(). Baseado no mecanismo de module_param descrito no LKMPG:
- * http://www.tldp.org/LDP/lkmpg/2.6/html/lkmpg.html#AEN323
- *
- * Carregamento:
- *   $ modprobe xtea_driver key0="f0e1d2c3" key1="b4a59687" \
- *              key2="78695a4b" key3="3c2d1e0f"
- *
- * Se nenhum parametro for passado, usa a chave padrao (a mesma do
- * exemplo do enunciado da Atividade 2).
- *
- * IMPORTANTE: para "modprobe xtea_driver ..." funcionar, o MODULO
- * (arquivo .ko) precisa se chamar "xtea_driver" -- e' por isso que este
- * arquivo fonte e' xtea_driver.c e o Makefile usa "obj-m := xtea_driver.o".
- * Isso e' diferente do nome do DEVICE (DEVICE_NAME, que tambem e'
- * "xtea_driver" e determina o caminho /dev/xtea_driver) -- sao dois
- * "nomes" com papeis diferentes que aqui coincidem por conveniencia.
- *
- * PROTOCOLO (mudou em relacao a Atividade 2 -- a chave nao faz mais
- * parte do comando, ja que agora e' fixa por chave carregada no modulo):
- *
- *   <cmd> <tamanho> <dados_hex>
- *
- *   cmd       : "enc" (cifra) ou "dec" (decifra)
- *   tamanho   : quantidade de bytes dos dados, decimal, multiplo de 8
- *   dados_hex : os bytes de entrada em hexadecimal (2*tamanho caracteres)
- *
- *   Exemplo:  enc 8 1234567890123456
- *
- * O resultado (hex) fica disponivel no proximo read(), igual a
- * Atividade 2.
+ * @brief Desafio XTEA: recebe a chave por parametros do modulo.
+ * Uso: modprobe xtea_driver key0=... key1=... key2=... key3=...
+ * Sem parametros, usa a chave padrao da Atividade 2.
  */
 
 #include <linux/init.h>
@@ -45,16 +15,13 @@
 #include <linux/mutex.h>
 #include <linux/string.h>
 
-#define DEVICE_NAME "xtea_driver"   ///< Aparece em /dev/xtea_driver
+#define DEVICE_NAME "xtea_driver"   
 #define CLASS_NAME  "cripto_class"
 
-#define XTEA_ROUNDS      32
-#define XTEA_BLOCK_BYTES 8
-#define MAX_DATA_BYTES   256
+#define XTEA_ROUNDS      32   // Numero de rounds do XTEA.
+#define XTEA_BLOCK_BYTES 8    // Tamanho do bloco, em bytes.
+#define MAX_DATA_BYTES   256  // Limite de dados por comando.
 
-/* Buffer de entrada: "enc "/"dec " + numero do tamanho + espacos +
- * 2*MAX_DATA_BYTES hex + folga. Bem menor que na Atividade 2 porque a
- * chave saiu do comando. */
 #define MAX_CMD_LEN (16 + 16 + 2*MAX_DATA_BYTES + 16)
 
 MODULE_LICENSE("GPL");
@@ -62,23 +29,13 @@ MODULE_AUTHOR("Author Name");
 MODULE_DESCRIPTION("Driver de criptografia XTEA com chave via module_param.");
 MODULE_VERSION("0.2");
 
-// ---------------------------------------------------------------------
-// Parametros de modulo: a chave XTEA (128 bits = 4 palavras de 32 bits),
-// cada uma passada como string hexadecimal no carregamento do modulo.
-// ---------------------------------------------------------------------
 
 static char *key0 = "f0e1d2c3";
 static char *key1 = "b4a59687";
 static char *key2 = "78695a4b";
 static char *key3 = "3c2d1e0f";
 
-/* module_param(nome_da_variavel, tipo, permissao_em_sysfs).
- * "charp" = string (char *). 0444 deixa o valor visivel (somente
- * leitura) em /sys/module/xtea_driver/parameters/keyN depois que o
- * modulo estiver carregado -- passe 0 no lugar de 0444 se preferir nao
- * expor a chave ali. O NOME do parametro no modprobe e' o nome da
- * variavel C (key0, key1, key2, key3), a menos que se use
- * module_param_named() para dar um nome diferente. */
+// charp recebe cada chave como texto; 0444 permite consulta no sysfs.
 module_param(key0, charp, 0444);
 MODULE_PARM_DESC(key0, "Palavra 0 (32 bits, hex) da chave XTEA");
 module_param(key1, charp, 0444);
@@ -88,8 +45,7 @@ MODULE_PARM_DESC(key2, "Palavra 2 (32 bits, hex) da chave XTEA");
 module_param(key3, charp, 0444);
 MODULE_PARM_DESC(key3, "Palavra 3 (32 bits, hex) da chave XTEA");
 
-/* Chave efetiva, ja convertida de string hex para inteiro (feito uma
- * vez em cripto_init(), a partir de key0..key3 acima). */
+// Chave convertida para quatro palavras de 32 bits na inicializacao.
 static u32 xtea_key[4];
 
 static int majorNumber;
@@ -101,9 +57,7 @@ static DEFINE_MUTEX(dev_lock);
 static char *result_hex = NULL;
 static size_t result_len = 0;
 
-// ---------------------------------------------------------------------
-// XTEA (algoritmo de referencia do enunciado, adaptado para tipos do kernel)
-// ---------------------------------------------------------------------
+// XTEA do enunciado, adaptado para os tipos do kernel.
 
 static void xtea_encipher(u32 num_rounds, u32 v[2], const u32 key[4]){
 	u32 i;
@@ -129,10 +83,7 @@ static void xtea_decipher(u32 num_rounds, u32 v[2], const u32 key[4]){
 	v[0] = v0; v[1] = v1;
 }
 
-// ---------------------------------------------------------------------
-// Helpers de hex <-> bytes / u32 (big-endian explicito, mesma
-// convencao da Atividade 2)
-// ---------------------------------------------------------------------
+// Conversoes entre hexadecimal, bytes e palavras de 32 bits em big-endian.
 
 static const char hex_digits[] = "0123456789abcdef";
 
@@ -175,11 +126,7 @@ static void u32_to_bytes_be(u32 v, unsigned char *b){
 	b[3] = v & 0xff;
 }
 
-/** @brief Converte uma string hex (ate' 8 caracteres) para u32.
- *  Usada so' para interpretar key0..key3 recebidos como parametro de
- *  modulo -- escrita na mao (em vez de kstrtou32) para nao depender de
- *  nenhum header alem dos ja incluidos.
- *  @return 0 em sucesso, -1 se a string for invalida/vazia/> 8 chars. */
+// Converte uma chave hexadecimal de ate 8 caracteres para u32.
 static int hexstr_to_u32(const char *s, u32 *out){
 	size_t i, len = strlen(s);
 	u32 val = 0;
@@ -197,9 +144,7 @@ static int hexstr_to_u32(const char *s, u32 *out){
 	return 0;
 }
 
-// ---------------------------------------------------------------------
 // file_operations
-// ---------------------------------------------------------------------
 
 static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
@@ -251,8 +196,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	return to_copy;
 }
 
-/** @brief Interpreta o comando "enc"/"dec" e executa a operacao XTEA
- *  usando a chave fixa (xtea_key) carregada no modulo. */
+// Valida o comando e executa a operacao XTEA. 
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	char *kbuf;
 	char cmd[8];
@@ -285,7 +229,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		return -ENOMEM;
 	}
 
-	/* Novo protocolo (sem chave no comando): cmd tamanho dados_hex */
+	// Protocolo: comando, tamanho e dados em hexadecimal. 
 	n = sscanf(kbuf, "%7s %u %s", cmd, &data_size, hexdata);
 
 	if (n != 3){
@@ -377,16 +321,12 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	return len;
 }
 
-// ---------------------------------------------------------------------
 // init / exit
-// ---------------------------------------------------------------------
 
 static int __init cripto_init(void){
 	printk(KERN_INFO "Cripto Driver: Initializing the LKM\n");
 
-	/* Converte os parametros de modulo (strings hex) para a chave
-	 * efetiva usada pelo XTEA. Se algum for invalido, o modulo recusa
-	 * a carga (return != 0 em um initcall impede o modprobe/insmod). */
+	// Converte os parametros para a chave; valor invalido impede a carga.
 	if (hexstr_to_u32(key0, &xtea_key[0]) != 0){
 		printk(KERN_ALERT "Cripto Driver: key0 invalido: '%s' (precisa ser hex, ate 8 digitos)\n", key0);
 		return -EINVAL;

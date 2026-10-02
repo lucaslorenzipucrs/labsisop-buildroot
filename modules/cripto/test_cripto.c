@@ -1,26 +1,5 @@
-/**
- * @brief Aplicacao de teste do driver XTEA (/dev/xtea_driver) com chave
- * definida via module_param no carregamento do modulo.
- *
- * O protocolo enviado ao driver NAO leva mais a chave (ela ja esta fixa
- * no modulo, carregada via modprobe key0=... key1=... key2=... key3=...):
- *
- *   <cmd> <tamanho> <dados_hex>
- *
- * Mas para conferir o resultado, este teste ainda precisa saber QUAL
- * chave foi usada para carregar o modulo, e' por isso que ela pode ser
- * passada como argumento de linha de comando (tem que bater com o que
- * voce usou no modprobe!). Se voce carregou o modulo sem parametros
- * (usando a chave padrao), pode rodar o teste tambem sem argumentos.
- *
- * Uso:
- *   test_cripto                                   -> usa a chave padrao
- *   test_cripto key0 key1 key2 key3               -> usa a chave dada
- *
- * Exemplo batendo com o modprobe do enunciado:
- *   modprobe xtea_driver key0="f0e1d2c3" key1="b4a59687" \
- *            key2="78695a4b" key3="3c2d1e0f"
- *   test_cripto f0e1d2c3 b4a59687 78695a4b 3c2d1e0f
+/** @brief Testa a cifragem e a decifragem do driver XTEA.
+ * Informe a mesma chave usada ao carregar o modulo.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +11,7 @@
 
 #define BUFFER_LENGTH 1024
 
-/* ---- XTEA de referencia (mesma do enunciado da Atividade 2) ---- */
+// Implementacao de referencia do XTEA. 
 
 static void encipher(uint32_t num_rounds, uint32_t v[2], const uint32_t key[4]){
 	uint32_t i;
@@ -103,7 +82,7 @@ static int run_case(int fd, const char *cmd_name, int is_enc,
 
 int main(int argc, char **argv){
 	int fd;
-	uint32_t key[4] = {0xf0e1d2c3, 0xb4a59687, 0x78695a4b, 0x3c2d1e0f}; /* chave padrao */
+	uint32_t key[4] = {0xf0e1d2c3, 0xb4a59687, 0x78695a4b, 0x3c2d1e0f}; /* Chave padrao. */
 	uint32_t msg1[2] = {0x12345678, 0x90123456};
 	uint32_t msg2[4] = {0xdeadbeef, 0xcafebabe, 0x01234567, 0x89abcdef};
 
