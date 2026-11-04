@@ -1,4 +1,4 @@
-cmd_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o := gcc -Wp,-MD,/workspaces/labsisop-buildroot/modules/simple_driver/.simple_driver.mod.o.d -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include -I./arch/x86/include -I./arch/x86/include/generated  -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/kconfig.h -D__KERNEL__ -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fshort-wchar -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -fno-PIE -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -m32 -msoft-float -mregparm=3 -freg-struct-return -fno-pic -mpreferred-stack-boundary=2 -march=i686 -Wa,-mtune=generic32 -ffreestanding -DCONFIG_AS_CFI=1 -DCONFIG_AS_CFI_SIGNAL_FRAME=1 -DCONFIG_AS_CFI_SECTIONS=1 -DCONFIG_AS_SSSE3=1 -DCONFIG_AS_CRC32=1 -DCONFIG_AS_AVX=1 -DCONFIG_AS_AVX2=1 -DCONFIG_AS_AVX512=1 -DCONFIG_AS_SHA1_NI=1 -DCONFIG_AS_SHA256_NI=1 -pipe -Wno-sign-compare -fno-asynchronous-unwind-tables -fno-delete-null-pointer-checks -Wno-frame-address -Wno-format-truncation -Wno-format-overflow -Wno-int-in-bool-context -O2 -DCC_HAVE_ASM_GOTO -Wframe-larger-than=1024 -fno-stack-protector -Wno-unused-but-set-variable -Wno-unused-const-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -Wdeclaration-after-statement -Wno-pointer-sign -fno-strict-overflow -fconserve-stack -Werror=implicit-int -Werror=strict-prototypes -Werror=date-time -Werror=incompatible-pointer-types -Werror=designated-init  -DKBUILD_BASENAME='"simple_driver.mod"'  -DKBUILD_MODNAME='"simple_driver"' -DMODULE  -c -o /workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o /workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.c
+cmd_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o := gcc -Wp,-MD,/workspaces/labsisop-buildroot/modules/simple_driver/.simple_driver.mod.o.d -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include -I./arch/x86/include -I./arch/x86/include/generated  -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/kconfig.h -D__KERNEL__ -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fshort-wchar -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -fno-PIE -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -m32 -msoft-float -mregparm=3 -freg-struct-return -fno-pic -mpreferred-stack-boundary=2 -march=i686 -Wa,-mtune=generic32 -ffreestanding -DCONFIG_AS_CFI=1 -DCONFIG_AS_CFI_SIGNAL_FRAME=1 -DCONFIG_AS_CFI_SECTIONS=1 -DCONFIG_AS_SSSE3=1 -DCONFIG_AS_CRC32=1 -DCONFIG_AS_AVX=1 -DCONFIG_AS_AVX2=1 -DCONFIG_AS_AVX512=1 -DCONFIG_AS_SHA1_NI=1 -DCONFIG_AS_SHA256_NI=1 -pipe -Wno-sign-compare -fno-asynchronous-unwind-tables -fno-delete-null-pointer-checks -Wno-frame-address -Wno-format-truncation -Wno-format-overflow -Wno-int-in-bool-context -O2 -DCC_HAVE_ASM_GOTO -Wframe-larger-than=1024 -fno-stack-protector -Wno-unused-but-set-variable -Wno-unused-const-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -pg -mfentry -DCC_USING_FENTRY -Wdeclaration-after-statement -Wno-pointer-sign -fno-strict-overflow -fconserve-stack -Werror=implicit-int -Werror=strict-prototypes -Werror=date-time -Werror=incompatible-pointer-types -Werror=designated-init  -DKBUILD_BASENAME='"simple_driver.mod"'  -DKBUILD_MODNAME='"simple_driver"' -DMODULE  -c -o /workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o /workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.c
 
 source_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o := /workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.c
 
@@ -271,6 +271,17 @@ deps_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o :=
   arch/x86/include/uapi/asm/ioctl.h \
   include/asm-generic/ioctl.h \
   include/uapi/asm-generic/ioctl.h \
+  arch/x86/include/asm/atomic.h \
+  arch/x86/include/asm/cmpxchg.h \
+  arch/x86/include/asm/cmpxchg_32.h \
+  arch/x86/include/asm/atomic64_32.h \
+  include/linux/tracepoint-defs.h \
+  include/linux/atomic.h \
+    $(wildcard include/config/generic/atomic64.h) \
+  include/asm-generic/atomic-long.h \
+  include/linux/static_key.h \
+  include/linux/jump_label.h \
+    $(wildcard include/config/jump/label.h) \
   arch/x86/include/asm/paravirt.h \
   arch/x86/include/asm/frame.h \
   arch/x86/include/asm/special_insns.h \
@@ -285,13 +296,6 @@ deps_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o :=
     $(wildcard include/config/irqsoff/tracer.h) \
     $(wildcard include/config/trace/irqflags/support.h) \
   arch/x86/include/asm/irqflags.h \
-  include/linux/atomic.h \
-    $(wildcard include/config/generic/atomic64.h) \
-  arch/x86/include/asm/atomic.h \
-  arch/x86/include/asm/cmpxchg.h \
-  arch/x86/include/asm/cmpxchg_32.h \
-  arch/x86/include/asm/atomic64_32.h \
-  include/asm-generic/atomic-long.h \
   include/linux/bottom_half.h \
   include/linux/spinlock_types.h \
   include/linux/lockdep.h \
@@ -299,8 +303,6 @@ deps_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o :=
     $(wildcard include/config/lock/stat.h) \
   include/linux/rwlock_types.h \
   arch/x86/include/asm/spinlock.h \
-  include/linux/jump_label.h \
-    $(wildcard include/config/jump/label.h) \
   arch/x86/include/asm/qspinlock.h \
   include/asm-generic/qspinlock.h \
   arch/x86/include/asm/qrwlock.h \
@@ -552,6 +554,7 @@ deps_/workspaces/labsisop-buildroot/modules/simple_driver/simple_driver.mod.o :=
   include/uapi/linux/auxvec.h \
   include/linux/uprobes.h \
     $(wildcard include/config/uprobes.h) \
+  arch/x86/include/asm/uprobes.h \
   arch/x86/include/asm/desc.h \
   arch/x86/include/uapi/asm/ldt.h \
   include/uapi/linux/elf.h \

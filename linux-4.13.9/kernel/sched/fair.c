@@ -6064,7 +6064,9 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 
 static void set_last_buddy(struct sched_entity *se)
 {
-	if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE))
+	if (entity_is_task(se) &&
+	    unlikely(task_of(se)->policy == SCHED_IDLE ||
+		     task_of(se)->policy == SCHED_LOW_IDLE))
 		return;
 
 	for_each_sched_entity(se) {
@@ -6076,7 +6078,9 @@ static void set_last_buddy(struct sched_entity *se)
 
 static void set_next_buddy(struct sched_entity *se)
 {
-	if (entity_is_task(se) && unlikely(task_of(se)->policy == SCHED_IDLE))
+	if (entity_is_task(se) &&
+	    unlikely(task_of(se)->policy == SCHED_IDLE ||
+		     task_of(se)->policy == SCHED_LOW_IDLE))
 		return;
 
 	for_each_sched_entity(se) {
@@ -6135,9 +6139,13 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 
 	/* Idle tasks are by definition preempted by non-idle tasks. */
 	if (unlikely(curr->policy == SCHED_IDLE) &&
-	    likely(p->policy != SCHED_IDLE))
+		likely(p->policy != SCHED_IDLE) &&
+		p->policy != SCHED_LOW_IDLE)
 		goto preempt;
 
+	if (unlikely(curr->policy == SCHED_LOW_IDLE) &&
+		likely(p->policy != SCHED_LOW_IDLE))
+		goto preempt;
 	/*
 	 * Batch and idle tasks do not preempt non-idle tasks (their preemption
 	 * is driven by the tick):
@@ -6534,7 +6542,8 @@ static int task_hot(struct task_struct *p, struct lb_env *env)
 	if (p->sched_class != &fair_sched_class)
 		return 0;
 
-	if (unlikely(p->policy == SCHED_IDLE))
+	if (unlikely(p->policy == SCHED_IDLE ||
+		     p->policy == SCHED_LOW_IDLE))
 		return 0;
 
 	/*

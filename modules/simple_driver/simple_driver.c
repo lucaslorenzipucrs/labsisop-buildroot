@@ -68,37 +68,37 @@ static struct file_operations fops =
  *  @return returns 0 if successful
  */
 static int __init simple_init(void){
-	printk(KERN_INFO "Simple Driver: Initializing the LKM\n");
+	trace_printk( "Simple Driver: Initializing the LKM\n");
 
 	// Try to dynamically allocate a major number for the device -- more difficult but worth it
 	majorNumber = register_chrdev(0, DEVICE_NAME, &fops);
 	if (majorNumber<0){
-		printk(KERN_ALERT "Simple Driver failed to register a major number\n");
+		trace_printk( "Simple Driver failed to register a major number\n");
 		return majorNumber;
 	}
 
-	printk(KERN_INFO "Simple Driver: registered correctly with major number %d\n", majorNumber);
+	trace_printk( "Simple Driver: registered correctly with major number %d\n", majorNumber);
 
 	// Register the device class
 	charClass = class_create(THIS_MODULE, CLASS_NAME);
 	if (IS_ERR(charClass)){                // Check for error and clean up if there is
 		unregister_chrdev(majorNumber, DEVICE_NAME);
-		printk(KERN_ALERT "Simple Driver: failed to register device class\n");
+		trace_printk( "Simple Driver: failed to register device class\n");
 		return PTR_ERR(charClass);          // Correct way to return an error on a pointer
 	}
 
-	printk(KERN_INFO "Simple Driver: device class registered correctly\n");
+	trace_printk( "Simple Driver: device class registered correctly\n");
 
 	// Register the device driver
 	charDevice = device_create(charClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
 	if (IS_ERR(charDevice)){               // Clean up if there is an error
 		class_destroy(charClass);           // Repeated code but the alternative is goto statements
 		unregister_chrdev(majorNumber, DEVICE_NAME);
-		printk(KERN_ALERT "Simple Driver: failed to create the device\n");
+		trace_printk( "Simple Driver: failed to create the device\n");
 		return PTR_ERR(charDevice);
 	}
 
-	printk(KERN_INFO "Simple Driver: device class created correctly\n"); // Made it! device was initialized
+	trace_printk( "Simple Driver: device class created correctly\n"); // Made it! device was initialized
 
 	return 0;
 }
@@ -123,14 +123,14 @@ static void __exit simple_exit(void){
 	class_unregister(charClass);                          // unregister the device class
 	class_destroy(charClass);                             // remove the device class
 	unregister_chrdev(majorNumber, DEVICE_NAME);             // unregister the major number
-	printk(KERN_INFO "Simple Driver: goodbye from the LKM!\n");
+	trace_printk( "Simple Driver: goodbye from the LKM!\n");
 }
 
 
 /** @brief The device open function that is called each time the device is opened */
 static int dev_open(struct inode *inodep, struct file *filep){
 	numberOpens++;
-	printk(KERN_INFO "Simple Driver: device has been opened %d time(s)\n", numberOpens);
+	trace_printk( "Simple Driver: device has been opened %d time(s)\n", numberOpens);
 	return 0;
 }
 
@@ -150,7 +150,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 
 	if (list_empty(&msg_queue)) {
 		mutex_unlock(&msg_queue_lock);
-		printk(KERN_INFO "Simple Driver: fila de mensagens vazia\n");
+		trace_printk( "Simple Driver: fila de mensagens vazia\n");
 		return 0;
 	}
 
@@ -164,13 +164,13 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	error_count = copy_to_user(buffer, node->data, to_copy);
 
 	if (error_count != 0){
-		printk(KERN_INFO "Simple Driver: falhou ao enviar %d bytes ao usuario\n", error_count);
+		trace_printk( "Simple Driver: falhou ao enviar %d bytes ao usuario\n", error_count);
 		kfree(node->data);
 		kfree(node);
 		return -EFAULT;
 	}
 
-	printk(KERN_INFO "Simple Driver: enviados %zu caracteres ao usuario\n", to_copy);
+	trace_printk( "Simple Driver: enviados %zu caracteres ao usuario\n", to_copy);
 
 	kfree(node->data);
 	kfree(node);
@@ -179,7 +179,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 }
 
 
-	 //**  @brief Copia uma mensagem do usuario e a adiciona.
+	 /**  @brief Copia uma mensagem do usuario e a adiciona.
  *  @param filep A pointer to a file object
  *  @param buffer The buffer to that contains the string to write to the device
  *  @param len The length of the array of data that is being passed in the const char buffer
@@ -189,7 +189,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	struct msg_node *node;
 
 	if (len == 0 || len > MAX_MSG_SIZE){
-		printk(KERN_ALERT "Simple Driver: tamanho de mensagem invalido (%zu)\n", len);
+		trace_printk( "Simple Driver: tamanho de mensagem invalido (%zu)\n", len);
 		return -EINVAL;
 	}
 
@@ -217,7 +217,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	list_add_tail(&node->list, &msg_queue); 
 	mutex_unlock(&msg_queue_lock);
 
-	printk(KERN_INFO "Simple Driver: recebidos %zu caracteres do usuario, adicionados a fila\n", len);
+	trace_printk( "Simple Driver: recebidos %zu caracteres do usuario, adicionados a fila\n", len);
 
 	return len;
 }
@@ -226,7 +226,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
  *  the userspace program
  */
 static int dev_release(struct inode *inodep, struct file *filep){
-	printk(KERN_INFO "Simple Driver: device successfully closed\n");
+	trace_printk( "Simple Driver: device successfully closed\n");
 	return 0;
 }
 
